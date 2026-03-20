@@ -1,0 +1,84 @@
+O Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos os direitos reservados.
+
+Instale o PowerShell mais recente para obter novos recursos e aprimoramentos! https://aka.ms/PSWindows
+
+PS D:\GitHub\AiCommiter\aicommit> aicommit
+? Select files to include in the commit: done (8 selections)
+
+╭────────────────────────────────────────────── Suggested Commit Message ──────────────────────────────────────────────╮
+│                                                                                                                      │
+│  Refactor aicommit to be a proper Python package                                                                     │
+│                                                                                                                      │
+╰───────────────────────────────────── model: arcee-ai/trinity-large-preview:free ─────────────────────────────────────╯
+
+? What would you like to do? Accept and commit
+✓ Committed successfully
+
+? Do you want to commit more files? Yes
+? Select files to include in the commit: done
+✗ No files selected. Aborting.
+PS D:\GitHub\AiCommiter\aicommit> aicommit
+? Select files to include in the commit: done (6 selections)
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Scripts\aicommit.exe\__main__.py", line 5, in <module>
+  File "D:\GitHub\AiCommiter\aicommit\cli.py", line 117, in main
+    ai_result = suggest_commit_message(diff_payload, config)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub\AiCommiter\aicommit\ai.py", line 101, in suggest_commit_message
+    response = client.post(
+               ^^^^^^^^^^^^
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_client.py", line 1144, in post
+    return self.request(
+           ^^^^^^^^^^^^^
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_client.py", line 825, in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_client.py", line 928, in send
+    raise exc
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_client.py", line 922, in send
+    response.read()
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_models.py", line 881, in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_models.py", line 897, in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_models.py", line 951, in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_client.py", line 153, in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_transports\default.py", line 127, in __iter__
+    for part in self._httpcore_stream:
+                ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpcore\_sync\connection_pool.py", line 407, in __iter__
+    raise exc from None
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpcore\_sync\connection_pool.py", line 403, in __iter__
+    for part in self._stream:
+                ^^^^^^^^^^^^
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpcore\_sync\http11.py", line 342, in __iter__
+    raise exc
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpcore\_sync\http11.py", line 334, in __iter__
+    for chunk in self._connection._receive_response_body(**kwargs):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpcore\_sync\http11.py", line 203, in _receive_response_body
+    event = self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpcore\_sync\http11.py", line 217, in _receive_event
+    data = self._network_stream.read(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpcore\_backends\sync.py", line 128, in read
+    return self._sock.recv(max_bytes)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\ssl.py", line 1232, in recv
+    return self.read(buflen)
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Users\gusta\AppData\Local\Programs\Python\Python312\Lib\ssl.py", line 1105, in read
+    return self._sslobj.read(len)
+           ^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+PS D:\GitHub\AiCommiter\aicommit>
