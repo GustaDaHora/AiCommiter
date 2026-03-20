@@ -20,6 +20,7 @@ _DEFAULTS = {
     "base_url": "https://openrouter.ai/api/v1",
     "max_diff_lines_per_file": 500,
     "max_diff_lines_total": 2000,
+    "enable_logging": 0,
 }
 
 
@@ -81,6 +82,10 @@ def load_config() -> Config:
         str(behaviour_section.get("max_diff_lines_total", _DEFAULTS["max_diff_lines_total"]))
     )
 
+    enable_logging = int(
+        str(behaviour_section.get("enable_logging", _DEFAULTS["enable_logging"]))
+    )
+
     editor_raw = str(behaviour_section.get("editor", ""))
     editor = editor_raw if editor_raw else None
 
@@ -91,6 +96,7 @@ def load_config() -> Config:
         max_diff_lines_per_file=max_diff_lines_per_file,
         max_diff_lines_total=max_diff_lines_total,
         editor=editor,
+        enable_logging=enable_logging,
     )
 
 

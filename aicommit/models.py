@@ -56,6 +56,7 @@ class Config:
     max_diff_lines_per_file: int
     max_diff_lines_total: int
     editor: str | None
+    enable_logging: int
 
 
 @dataclass

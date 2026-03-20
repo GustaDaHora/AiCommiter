@@ -7,6 +7,12 @@ No other module may make HTTP requests.
 
 from __future__ import annotations
 
+import json
+import logging
+import time
+from datetime import datetime
+from pathlib import Path
+
 import httpx
 
 from aicommit.models import CommitSuggestion, Config, DiffPayload, Result
@@ -76,6 +82,32 @@ FALLBACK_MODELS = [
 ]
 
 
+def _log_api_event(config: Config, event_type: str, data: dict | str) -> None:
+    """Log an API event to a timestamped file in the logs directory."""
+    if config.enable_logging != 1:
+        return
+
+    from aicommit.config import _get_config_path
+    
+    log_dir = _get_config_path().parent / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    log_file = log_dir / f"api_{timestamp}_{event_type}.json"
+    
+    log_data = {
+        "timestamp": datetime.now().isoformat(),
+        "event_type": event_type,
+        "data": data,
+    }
+    
+    try:
+        log_file.write_text(json.dumps(log_data, indent=2), encoding="utf-8")
+    except Exception:
+        # Silently fail logging if it fails
+        pass
+
+
 def suggest_commit_message(diff: DiffPayload, config: Config) -> Result[CommitSuggestion]:
     """Send a diff to OpenRouter and get a suggested commit message, trying fallbacks if needed."""
     user_prompt = _build_user_prompt(diff)
@@ -96,6 +128,12 @@ def suggest_commit_message(diff: DiffPayload, config: Config) -> Result[CommitSu
             "temperature": 0.2,
         }
 
+        _log_api_event(config, "request", {
+            "model": model,
+            "url": url,
+            "payload": request_body
+        })
+
         try:
             with httpx.Client(timeout=_API_TIMEOUT_SECONDS) as client:
                 response = client.post(
@@ -106,20 +144,36 @@ def suggest_commit_message(diff: DiffPayload, config: Config) -> Result[CommitSu
                         "Content-Type": "application/json",
                     },
                 )
+                
+                _log_api_event(config, "response", {
+                    "model": model,
+                    "status_code": response.status_code,
+                    "body": response.text
+                })
+
                 response.raise_for_status()
         except httpx.TimeoutException:
             last_error = f"Model {model} timed out."
+            _log_api_event(config, "error", {"model": model, "error": last_error})
             continue
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 401:
+                _log_api_event(config, "error", {"model": model, "error": "Unauthorized"})
                 return Result(ok=False, error="API unauthorized (HTTP 401): Check your API key.")
             last_error = (
                 f"Model {model} API error "
                 f"(HTTP {exc.response.status_code}): {exc.response.text}"
             )
+            _log_api_event(config, "error", {"model": model, "error": last_error})
             continue
         except Exception as exc:
+            import traceback
             last_error = f"Model {model} API request failed: {exc}"
+            _log_api_event(config, "error", {
+                "model": model, 
+                "error": last_error,
+                "traceback": traceback.format_exc()
+            })
             continue
 
         try:
@@ -129,6 +183,7 @@ def suggest_commit_message(diff: DiffPayload, config: Config) -> Result[CommitSu
             model_used = data.get("model", model)
         except (KeyError, IndexError, TypeError, AttributeError) as exc:
             last_error = f"Model {model} unexpected API response format: {exc}"
+            _log_api_event(config, "error", {"model": model, "error": last_error})
             continue
 
         if not content:
