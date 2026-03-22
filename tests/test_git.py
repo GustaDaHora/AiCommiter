@@ -159,15 +159,15 @@ class TestListAllFiles:
         assert ".env" in files
         assert files == sorted(set(files))  # sorted, no dupes
 
-    def test_does_not_use_exclude_standard_for_untracked(
+    def test_uses_exclude_standard_for_untracked(
         self, mock_subprocess: MagicMock, tmp_path: Path
     ) -> None:
-        """git ls-files --others is called WITHOUT --exclude-standard.
+        """git ls-files --others uses --exclude-standard to respect .gitignore.
 
-        --exclude-standard would apply the current .gitignore as a filter,
-        hiding already-ignored files from the AI — exactly the opposite of
-        what we need. The fix is to omit the flag entirely: git ls-files
-        --others (no flag) returns all untracked files with no filtering.
+        Files the user has already chosen to ignore should NOT appear in the
+        listing sent to the AI. The AI already receives the full .gitignore
+        content as context, so it has all the information it needs to evaluate
+        and update the rules without needing to see every ignored file path.
         """
         mock_subprocess.side_effect = [
             MagicMock(returncode=0, stdout="", stderr=""),
@@ -178,27 +178,31 @@ class TestListAllFiles:
 
         calls = [call[0][0] for call in mock_subprocess.call_args_list]
         others_call = next(c for c in calls if "--others" in c)
-        assert "--exclude-standard" not in others_call
+        assert "--exclude-standard" in others_call
 
-    def test_git_ignored_files_visible_via_no_exclude_standard(
+    def test_gitignored_files_excluded_from_listing(
         self, mock_subprocess: MagicMock, tmp_path: Path
     ) -> None:
-        """Files already in .gitignore appear in the result (no filter applied)."""
-        (tmp_path / ".env").write_text("SECRET=abc")
+        """Files already in .gitignore do NOT appear in the listing.
+
+        The AI receives the .gitignore content separately as context, so it
+        can reason about the rules without needing the ignored paths listed.
+        """
         (tmp_path / ".gitignore").write_text(".env\n")
 
         mock_subprocess.side_effect = [
-            # .env is NOT tracked (not in --cached)
+            # only .gitignore is tracked
             MagicMock(returncode=0, stdout=".gitignore\n", stderr=""),
-            # but --no-exclude-standard makes git report it as untracked
-            MagicMock(returncode=0, stdout=".env\n", stderr=""),
+            # --exclude-standard means .env is filtered out by git
+            MagicMock(returncode=0, stdout="", stderr=""),
         ]
 
         result = list_all_files(str(tmp_path))
 
         assert result.ok is True
         assert result.value is not None
-        assert ".env" in result.value
+        assert ".env" not in result.value
+        assert ".gitignore" in result.value
 
     def test_collapses_heavy_directories_to_placeholder(
         self, mock_subprocess: MagicMock, tmp_path: Path
@@ -248,6 +252,35 @@ class TestListAllFiles:
         assert files is not None
         assert ".venv/" in files
         assert not any("pyvenv.cfg" in f for f in files)
+
+    def test_cache_dirs_are_NOT_collapsed(
+        self, mock_subprocess: MagicMock, tmp_path: Path
+    ) -> None:
+        """Cache and build dirs like __pycache__, .pytest_cache, dist are listed normally.
+
+        These are meaningful signals for the AI — it needs to see them to know
+        which ignore rules are appropriate. Only genuinely massive vendor dirs
+        (node_modules, .venv) are collapsed.
+        """
+        for d in ["__pycache__", ".pytest_cache", ".mypy_cache", "dist", "htmlcov"]:
+            cache_dir = tmp_path / d
+            cache_dir.mkdir()
+            (cache_dir / "somefile.py").write_text("")
+
+        mock_subprocess.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),
+        ]
+
+        result = list_all_files(str(tmp_path))
+
+        assert result.ok is True
+        files = result.value
+        assert files is not None
+        # Files inside cache dirs must be listed individually, not as placeholders
+        for d in ["__pycache__", ".pytest_cache", ".mypy_cache", "dist", "htmlcov"]:
+            assert any(f.startswith(f"{d}/") for f in files), f"{d}/ files should be listed"
+            assert f"{d}/" not in files, f"{d}/ should NOT appear as collapsed placeholder"
 
     def test_skips_git_directory_entirely(
         self, mock_subprocess: MagicMock, tmp_path: Path
