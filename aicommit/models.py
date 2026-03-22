@@ -66,3 +66,13 @@ class CommitResult:
     ok: bool
     commit_hash: str | None
     error: str | None
+
+
+@dataclass
+class GitignoreSuggestion:
+    """AI-generated .gitignore content, fully reorganized."""
+
+    content: str
+    # Flat list of patterns added/kept, for display purposes
+    entries: list[str]
+    model_used: str
