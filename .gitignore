@@ -20,16 +20,15 @@ wheels/
 .installed.cfg
 *.egg
 
-# Mypy
+# Type checking
 .mypy_cache/
 .dmypy.json
 dmypy.json
 
-# Ruff
+# Linting
 .ruff_cache/
-.ruff.toml
 
-# Pytest
+# Testing
 .pytest_cache/
 .coverage
 htmlcov/
@@ -40,7 +39,14 @@ coverage.xml
 *.cover
 *.py,cover
 .hypothesis/
-.pytest_cache/
+
+# Virtual environments
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
 # Editors
 .vscode/
@@ -54,21 +60,11 @@ Thumbs.db
 *.sublime-project
 
 # OS
-.DS_Store
 .DS_Store?
 ._*
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-Thumbs.db
-
-# Virtual environments
-.venv/
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
 
 # Logs
 *.log
@@ -80,7 +76,7 @@ temp/
 *.tmp
 *.temp
 
-# Configuration
+# Environment and secrets
 .env
 .env.local
 .env.*.local
@@ -90,26 +86,6 @@ secrets.*
 config.json
 config.yaml
 config.yml
-
-# Testing
-.coverage
-.coverage.*
-.pytest_cache/
-.nox/
-.tox/
-.coverage/
-htmlcov/
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
 
 # Project-specific
 agents.md
