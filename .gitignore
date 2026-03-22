@@ -20,6 +20,15 @@ wheels/
 .installed.cfg
 *.egg
 
+# Mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ruff
+.ruff_cache/
+.ruff.toml
+
 # Pytest
 .pytest_cache/
 .coverage
@@ -101,3 +110,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+
+# Project-specific
+agents.md
+terminal.txt
