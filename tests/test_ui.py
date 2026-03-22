@@ -7,9 +7,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from aicommit.models import ChangedFile, CommitResult, CommitSuggestion, Config
+from aicommit.models import ChangedFile, CommitResult, CommitSuggestion, Config, GitignoreSuggestion
 from aicommit.ui import (
     display_error,
+    display_gitignore_suggestion,
     display_success,
     prompt_edit_and_confirm,
     prompt_file_selection,
@@ -34,6 +35,16 @@ def mock_err_console(mocker: MagicMock) -> MagicMock:
     return cast(MagicMock, mocker.patch("aicommit.ui._err_console"))
 
 
+@pytest.fixture
+def sample_gitignore_suggestion() -> GitignoreSuggestion:
+    """Return a sample GitignoreSuggestion for testing."""
+    return GitignoreSuggestion(
+        content="# Python\n*.pyc\n__pycache__/\n.venv/\n\n# Editors\n.vscode/\n",
+        entries=["*.pyc", "__pycache__/", ".venv/", ".vscode/"],
+        model_used="openai/gpt-4o-mini",
+    )
+
+
 class TestPromptFileSelection:
     """Tests for prompt_file_selection()."""
 
@@ -43,8 +54,6 @@ class TestPromptFileSelection:
         sample_changed_files: list[ChangedFile],
     ) -> None:
         """Happy path: user selects a subset of files."""
-        # files are: [src/main.py, src/utils.py, README.md]
-        # src/main.py is index 0, README.md is index 2
         selected_values = ["file:0", "file:2"]
         mock_questionary.checkbox.return_value.ask.return_value = selected_values
 
@@ -59,7 +68,6 @@ class TestPromptFileSelection:
         sample_changed_files: list[ChangedFile],
     ) -> None:
         """User selects a folder, all child files are included recursively."""
-        # user selects the src directory, this implies dir:src 
         mock_questionary.checkbox.return_value.ask.return_value = ["dir:src"]
 
         result = prompt_file_selection(sample_changed_files)
@@ -173,6 +181,75 @@ class TestPromptEditAndConfirm:
         assert result is None
 
 
+class TestDisplayGitignoreSuggestion:
+    """Tests for display_gitignore_suggestion()."""
+
+    def test_returns_true_when_user_confirms(
+        self,
+        mock_questionary: MagicMock,
+        mock_console: MagicMock,
+        sample_gitignore_suggestion: GitignoreSuggestion,
+    ) -> None:
+        """User confirms → returns True."""
+        mock_questionary.confirm.return_value.ask.return_value = True
+
+        result = display_gitignore_suggestion(sample_gitignore_suggestion, has_existing=False)
+
+        assert result is True
+
+    def test_returns_false_when_user_aborts(
+        self,
+        mock_questionary: MagicMock,
+        mock_console: MagicMock,
+        sample_gitignore_suggestion: GitignoreSuggestion,
+    ) -> None:
+        """User declines → returns False."""
+        mock_questionary.confirm.return_value.ask.return_value = False
+
+        result = display_gitignore_suggestion(sample_gitignore_suggestion, has_existing=False)
+
+        assert result is False
+
+    def test_returns_false_when_user_cancels(
+        self,
+        mock_questionary: MagicMock,
+        mock_console: MagicMock,
+        sample_gitignore_suggestion: GitignoreSuggestion,
+    ) -> None:
+        """Ctrl+C (None returned by questionary) → returns False."""
+        mock_questionary.confirm.return_value.ask.return_value = None
+
+        result = display_gitignore_suggestion(sample_gitignore_suggestion, has_existing=False)
+
+        assert result is False
+
+    def test_renders_panel_to_console(
+        self,
+        mock_questionary: MagicMock,
+        mock_console: MagicMock,
+        sample_gitignore_suggestion: GitignoreSuggestion,
+    ) -> None:
+        """A panel is rendered to the console with the suggestion content."""
+        mock_questionary.confirm.return_value.ask.return_value = True
+
+        display_gitignore_suggestion(sample_gitignore_suggestion, has_existing=False)
+
+        assert mock_console.print.called
+
+    def test_confirm_prompt_is_called(
+        self,
+        mock_questionary: MagicMock,
+        mock_console: MagicMock,
+        sample_gitignore_suggestion: GitignoreSuggestion,
+    ) -> None:
+        """questionary.confirm is called once to get user confirmation."""
+        mock_questionary.confirm.return_value.ask.return_value = True
+
+        display_gitignore_suggestion(sample_gitignore_suggestion, has_existing=True)
+
+        mock_questionary.confirm.assert_called_once()
+
+
 class TestDisplayError:
     """Tests for display_error()."""
 
@@ -197,6 +274,7 @@ class TestDisplaySuccess:
         display_success(result)
         mock_console.print.assert_called()
 
+
 class TestPromptContinue:
     """Tests for prompt_continue()."""
 
@@ -209,6 +287,7 @@ class TestPromptContinue:
         mock_questionary.confirm.return_value.ask.return_value = True
 
         from aicommit.ui import prompt_continue
+
         result = prompt_continue()
 
         assert result is True
@@ -222,6 +301,7 @@ class TestPromptContinue:
         mock_questionary.confirm.return_value.ask.return_value = False
 
         from aicommit.ui import prompt_continue
+
         result = prompt_continue()
 
         assert result is False

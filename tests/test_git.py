@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import cast
 from unittest.mock import MagicMock
 
@@ -11,7 +12,10 @@ from aicommit.git import (
     detect_changed_files,
     get_diff_for_files,
     get_repo_root,
+    list_all_files,
+    read_gitignore,
     stage_and_commit,
+    write_gitignore,
 )
 from aicommit.models import ChangedFile, Config
 
@@ -54,11 +58,7 @@ class TestDetectChangedFiles:
     """Tests for detect_changed_files()."""
 
     def test_returns_staged_and_unstaged_files(self, mock_subprocess: MagicMock) -> None:
-        """Happy path: detects both staged and unstaged modified files.
-
-        git status --porcelain format: XY filename
-        X = staged status, Y = unstaged status
-        """
+        """Happy path: detects both staged and unstaged modified files."""
         mock_subprocess.return_value = MagicMock(
             returncode=0,
             stdout="M  src/main.py\nA  src/new.py\n M src/utils.py\n?? untracked.txt\n",
@@ -116,6 +116,317 @@ class TestDetectChangedFiles:
         assert len(files) == 2
         assert any(f.staged and f.path == "src/both.py" for f in files)
         assert any(not f.staged and f.path == "src/both.py" for f in files)
+
+
+class TestListAllFiles:
+    """Tests for list_all_files().
+
+    The function combines three sources:
+    - git ls-files --cached           (tracked files)
+    - git ls-files --others           (untracked, NO .gitignore filter)
+    - os.walk over the filesystem     (catches everything else)
+
+    Heavy directories are collapsed to a placeholder ("node_modules/").
+    """
+
+    def test_returns_sorted_union_of_all_sources(
+        self, mock_subprocess: MagicMock, tmp_path: Path
+    ) -> None:
+        """Happy path: git sources + filesystem walk all merged and sorted."""
+        # Filesystem: two real files
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "main.py").write_text("")
+        (tmp_path / "README.md").write_text("")
+        # git .git dir should be skipped automatically
+        (tmp_path / ".git").mkdir()
+        (tmp_path / ".git" / "config").write_text("")
+
+        mock_subprocess.side_effect = [
+            # git ls-files --cached
+            MagicMock(returncode=0, stdout="src/main.py\nREADME.md\n", stderr=""),
+            # git ls-files --others --no-exclude-standard
+            MagicMock(returncode=0, stdout=".env\n", stderr=""),
+        ]
+
+        # .env does not exist on disk but git reports it — still included
+        result = list_all_files(str(tmp_path))
+
+        assert result.ok is True
+        files = result.value
+        assert files is not None
+        assert "src/main.py" in files
+        assert "README.md" in files
+        assert ".env" in files
+        assert files == sorted(set(files))  # sorted, no dupes
+
+    def test_does_not_use_exclude_standard_for_untracked(
+        self, mock_subprocess: MagicMock, tmp_path: Path
+    ) -> None:
+        """git ls-files --others is called WITHOUT --exclude-standard.
+
+        --exclude-standard would apply the current .gitignore as a filter,
+        hiding already-ignored files from the AI — exactly the opposite of
+        what we need. The fix is to omit the flag entirely: git ls-files
+        --others (no flag) returns all untracked files with no filtering.
+        """
+        mock_subprocess.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),
+        ]
+
+        list_all_files(str(tmp_path))
+
+        calls = [call[0][0] for call in mock_subprocess.call_args_list]
+        others_call = next(c for c in calls if "--others" in c)
+        assert "--exclude-standard" not in others_call
+
+    def test_git_ignored_files_visible_via_no_exclude_standard(
+        self, mock_subprocess: MagicMock, tmp_path: Path
+    ) -> None:
+        """Files already in .gitignore appear in the result (no filter applied)."""
+        (tmp_path / ".env").write_text("SECRET=abc")
+        (tmp_path / ".gitignore").write_text(".env\n")
+
+        mock_subprocess.side_effect = [
+            # .env is NOT tracked (not in --cached)
+            MagicMock(returncode=0, stdout=".gitignore\n", stderr=""),
+            # but --no-exclude-standard makes git report it as untracked
+            MagicMock(returncode=0, stdout=".env\n", stderr=""),
+        ]
+
+        result = list_all_files(str(tmp_path))
+
+        assert result.ok is True
+        assert result.value is not None
+        assert ".env" in result.value
+
+    def test_collapses_heavy_directories_to_placeholder(
+        self, mock_subprocess: MagicMock, tmp_path: Path
+    ) -> None:
+        """node_modules/ content is not listed — only the directory placeholder."""
+        nm = tmp_path / "node_modules"
+        nm.mkdir()
+        (nm / "lodash").mkdir()
+        (nm / "lodash" / "index.js").write_text("")
+        (nm / "react").mkdir()
+        (nm / "react" / "index.js").write_text("")
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "main.py").write_text("")
+
+        mock_subprocess.side_effect = [
+            MagicMock(returncode=0, stdout="src/main.py\n", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),
+        ]
+
+        result = list_all_files(str(tmp_path))
+
+        assert result.ok is True
+        files = result.value
+        assert files is not None
+        assert "node_modules/" in files
+        assert not any("lodash" in f for f in files)
+        assert not any("react" in f for f in files)
+
+    def test_collapses_venv_directory(
+        self, mock_subprocess: MagicMock, tmp_path: Path
+    ) -> None:
+        """Virtual environment directories are collapsed to a placeholder."""
+        venv = tmp_path / ".venv"
+        venv.mkdir()
+        (venv / "pyvenv.cfg").write_text("")
+        (venv / "lib").mkdir()
+
+        mock_subprocess.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),
+        ]
+
+        result = list_all_files(str(tmp_path))
+
+        assert result.ok is True
+        files = result.value
+        assert files is not None
+        assert ".venv/" in files
+        assert not any("pyvenv.cfg" in f for f in files)
+
+    def test_skips_git_directory_entirely(
+        self, mock_subprocess: MagicMock, tmp_path: Path
+    ) -> None:
+        """.git/ directory and its contents never appear in results."""
+        git_dir = tmp_path / ".git"
+        git_dir.mkdir()
+        (git_dir / "HEAD").write_text("ref: refs/heads/main")
+        (tmp_path / "README.md").write_text("")
+
+        mock_subprocess.side_effect = [
+            MagicMock(returncode=0, stdout="README.md\n", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),
+        ]
+
+        result = list_all_files(str(tmp_path))
+
+        assert result.ok is True
+        files = result.value
+        assert files is not None
+        assert not any(".git" in f for f in files)
+
+    def test_deduplicates_files_across_all_sources(
+        self, mock_subprocess: MagicMock, tmp_path: Path
+    ) -> None:
+        """A file reported by multiple sources appears exactly once."""
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "main.py").write_text("")
+
+        mock_subprocess.side_effect = [
+            # same file in both git sources
+            MagicMock(returncode=0, stdout="src/main.py\n", stderr=""),
+            MagicMock(returncode=0, stdout="src/main.py\n", stderr=""),
+        ]
+
+        result = list_all_files(str(tmp_path))
+
+        assert result.ok is True
+        files = result.value
+        assert files is not None
+        assert files.count("src/main.py") == 1
+
+    def test_returns_empty_list_for_empty_repo(
+        self, mock_subprocess: MagicMock, tmp_path: Path
+    ) -> None:
+        """Edge case: no files at all."""
+        mock_subprocess.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),
+        ]
+
+        result = list_all_files(str(tmp_path))
+
+        assert result.ok is True
+        assert result.value == []
+
+    def test_returns_error_when_cached_command_fails(
+        self, mock_subprocess: MagicMock, tmp_path: Path
+    ) -> None:
+        """Error path: git ls-files --cached returns non-zero."""
+        mock_subprocess.side_effect = [
+            MagicMock(returncode=128, stdout="", stderr="fatal: not a git repository"),
+        ]
+
+        result = list_all_files(str(tmp_path))
+
+        assert result.ok is False
+        assert "not a git repository" in (result.error or "")
+
+    def test_returns_error_when_others_command_fails(
+        self, mock_subprocess: MagicMock, tmp_path: Path
+    ) -> None:
+        """Error path: git ls-files --others returns non-zero."""
+        mock_subprocess.side_effect = [
+            MagicMock(returncode=0, stdout="src/main.py\n", stderr=""),
+            MagicMock(returncode=128, stdout="", stderr="fatal: not a git repository"),
+        ]
+
+        result = list_all_files(str(tmp_path))
+
+        assert result.ok is False
+        assert result.error is not None
+
+    def test_strips_whitespace_from_git_paths(
+        self, mock_subprocess: MagicMock, tmp_path: Path
+    ) -> None:
+        """Paths with leading/trailing whitespace from git output are stripped."""
+        (tmp_path / "README.md").write_text("")
+
+        mock_subprocess.side_effect = [
+            MagicMock(returncode=0, stdout="  src/main.py  \n  README.md\n", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),
+        ]
+
+        result = list_all_files(str(tmp_path))
+
+        assert result.ok is True
+        assert result.value is not None
+        assert "src/main.py" in result.value
+        assert "README.md" in result.value
+        assert not any(p.startswith(" ") or p.endswith(" ") for p in result.value)
+
+    def test_result_is_sorted(
+        self, mock_subprocess: MagicMock, tmp_path: Path
+    ) -> None:
+        """Output list is always sorted alphabetically."""
+        (tmp_path / "z_last.py").write_text("")
+        (tmp_path / "a_first.py").write_text("")
+
+        mock_subprocess.side_effect = [
+            MagicMock(returncode=0, stdout="z_last.py\na_first.py\n", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),
+        ]
+
+        result = list_all_files(str(tmp_path))
+
+        assert result.ok is True
+        files = result.value
+        assert files is not None
+        assert files == sorted(files)
+
+
+class TestReadGitignore:
+    """Tests for read_gitignore()."""
+
+    def test_reads_existing_gitignore(self, tmp_path: Path) -> None:
+        """Happy path: reads the .gitignore file content."""
+        gitignore = tmp_path / ".gitignore"
+        gitignore.write_text("*.pyc\n__pycache__/\n", encoding="utf-8")
+
+        content = read_gitignore(str(tmp_path))
+
+        assert "*.pyc" in content
+        assert "__pycache__/" in content
+
+    def test_returns_empty_string_when_file_missing(self, tmp_path: Path) -> None:
+        """Edge case: no .gitignore file — returns empty string without error."""
+        content = read_gitignore(str(tmp_path))
+
+        assert content == ""
+
+
+class TestWriteGitignore:
+    """Tests for write_gitignore()."""
+
+    def test_creates_new_gitignore(self, tmp_path: Path) -> None:
+        """Happy path: creates .gitignore when it does not exist."""
+        result = write_gitignore(str(tmp_path), "*.pyc\n.venv/\n")
+
+        assert result.ok is True
+        written = (tmp_path / ".gitignore").read_text(encoding="utf-8")
+        assert "*.pyc" in written
+        assert ".venv/" in written
+
+    def test_overwrites_existing_gitignore(self, tmp_path: Path) -> None:
+        """Overwrites an existing .gitignore with new content."""
+        gitignore = tmp_path / ".gitignore"
+        gitignore.write_text("old content\n", encoding="utf-8")
+
+        result = write_gitignore(str(tmp_path), "new content\n")
+
+        assert result.ok is True
+        written = gitignore.read_text(encoding="utf-8")
+        assert "new content" in written
+        assert "old content" not in written
+
+    def test_returns_error_on_permission_failure(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Error path: write fails due to OS error."""
+        def _raise(*args: object, **kwargs: object) -> None:
+            raise OSError("Permission denied")
+
+        monkeypatch.setattr(Path, "write_text", _raise)
+
+        result = write_gitignore(str(tmp_path), "*.pyc\n")
+
+        assert result.ok is False
+        assert result.error is not None
 
 
 class TestGetDiffForFiles:
