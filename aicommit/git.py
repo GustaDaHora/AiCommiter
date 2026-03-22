@@ -110,29 +110,23 @@ def detect_changed_files(cwd: str) -> Result[list[ChangedFile]]:
     return Result(ok=True, value=files)
 
 
-# Directories so large that sending their full contents to the AI is wasteful.
-# When encountered during os.walk, only the directory name is emitted (e.g.
-# "node_modules/") instead of every file inside.
+# Directories so large that sending their full file tree to the AI adds noise
+# without value. When encountered during os.walk, only the directory name is
+# emitted as a placeholder (e.g. "node_modules/") instead of every file inside.
+#
+# Rule of thumb: only add a directory here if it contains GENERATED or VENDOR
+# files that number in the hundreds or thousands. Never add directories that
+# contain source code or test files — those must be visible to the AI.
 _HEAVY_DIRS = frozenset(
     {
-        "node_modules",
-        ".venv",
-        "venv",
-        "env",
-        "__pycache__",
-        ".mypy_cache",
-        ".ruff_cache",
-        ".pytest_cache",
-        ".tox",
-        "dist",
-        "build",
-        "target",
-        ".gradle",
-        ".idea",
-        ".next",
-        ".nuxt",
-        "coverage",
-        "htmlcov",
+        "node_modules",   # JS/TS vendor deps — can be 50k+ files
+        ".venv",          # Python virtual env
+        "venv",           # Python virtual env (alternate name)
+        "env",            # Python virtual env (alternate name)
+        ".gradle",        # Gradle build cache
+        ".next",          # Next.js build output
+        ".nuxt",          # Nuxt.js build output
+        "target",         # Rust / Maven / Gradle build output
     }
 )
 
@@ -174,8 +168,12 @@ def list_all_files(cwd: str) -> Result[list[str]]:
         if p:
             paths.add(p)
 
-    # --- source 2: git untracked, no .gitignore filter ---
-    others_proc = _run_git(["ls-files", "--others"], cwd)
+    # --- source 2: git untracked, respecting .gitignore ---
+    # --exclude-standard applies the .gitignore filter, so files the user has
+    # already chosen to ignore do NOT appear in the listing. The AI already
+    # receives the full .gitignore content as context, so it has all the
+    # information it needs to evaluate and update the rules.
+    others_proc = _run_git(["ls-files", "--others", "--exclude-standard"], cwd)
     if others_proc.returncode != 0:
         return Result(ok=False, error=others_proc.stderr.strip())
     for raw in others_proc.stdout.splitlines():
