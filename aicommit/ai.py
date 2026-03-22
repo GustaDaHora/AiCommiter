@@ -20,79 +20,118 @@ OPENROUTER_CHAT_ENDPOINT = "/chat/completions"
 # Commit message prompt
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """\
-You are a senior software engineer writing git commit messages for a professional codebase.
+SYSTEM_PROMPT = """You are a senior software engineer writing git commit messages \
+for a professional codebase.
 
-Before writing the message, reason briefly (internally) about:
-- What changed: additions, deletions, renames, refactors, or fixes?
-- What is the primary intent of the change?
-- Which module or component is most affected?
+Analyze the diff and write a commit message using this format:
 
-Rules you MUST follow:
-1. Follow Conventional Commits (https://www.conventionalcommits.org) strictly.
-2. Subject line MUST be 72 characters or fewer.
-3. Imperative mood only: "add" not "added" or "adds".
-4. Format: <type>(<scope>): <description>
-   - scope = the affected module, file stem, or layer (e.g. git, ui, config, auth)
-   - Valid types: feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert
-   - Use "refactor" when behavior does not change. Use "fix" only for actual bug corrections.
-   - Use "chore" for tooling, deps, and config files.
-5. Add a body (after a blank line) when the *why* is not obvious from the subject. \
-Keep it under 80 words.
-6. Do NOT invent context not present in the diff (no ticket numbers, no co-authors).
-7. Respond with ONLY the commit message. No explanation, no preamble, no markdown fences."""
+  <type>(<scope>): <description>
+
+  [optional body]
+
+TYPES — pick exactly one:
+  feat      A new feature or capability
+  fix       A bug correction (behavior was wrong, now it is right)
+  refactor  Code restructured with no behavior change (rename, extract, simplify)
+  test      Adding or updating tests only
+  docs      Documentation only (comments, README, docstrings)
+  chore     Tooling, dependencies, config files, build scripts
+  perf      Performance improvement with no API change
+  style     Formatting only (whitespace, semicolons) — zero logic change
+  ci        CI/CD pipeline configuration
+  build     Build system or compilation changes
+  revert    Reverting a previous commit
+
+SCOPE — the affected module, file stem, or layer (examples: git, ui, config, cli, auth).
+Omit scope only when the change spans the entire project with no clear focal point.
+
+SUBJECT LINE — strict rules:
+  - 72 characters maximum (type + scope + description combined)
+  - Imperative mood: "add feature" not "added feature" or "adds feature"
+  - No period at the end
+  - Lowercase first letter after the colon
+
+BODY — optional, use only when the subject cannot capture the why:
+  - Separated from subject by exactly one blank line
+  - Hard-wrap at 80 characters
+  - 80 words maximum
+  - Explain motivation or context, not what the code does (the diff already shows that)
+
+Do NOT invent context absent from the diff (no ticket numbers, no co-authors).
+Respond with ONLY the commit message — no explanation, no preamble, no markdown fences."""
 
 # ---------------------------------------------------------------------------
 # .gitignore prompt
 # ---------------------------------------------------------------------------
 
-GITIGNORE_SYSTEM_PROMPT = """\
-You are an expert software engineer and DevOps specialist. Your task is to generate \
-a complete, well-organized .gitignore file for a software project.
+GITIGNORE_SYSTEM_PROMPT = """You are an expert software engineer. \
+Generate a complete, well-organized .gitignore file.
 
-You will receive:
-1. A full list of every file currently present in the repository tree.
-2. The existing .gitignore content (may be empty if there is none).
+You will receive the full file tree of the repository and the existing .gitignore (if any).
 
-Your job:
-- Analyze the file list to identify the project's language(s), framework(s), \
-build tools, package managers, editors, and OS.
-- Generate a complete .gitignore that covers ALL of the following categories \
-(only include sections relevant to what you detected):
-    • Language artifacts (*.pyc, __pycache__, *.class, *.o, etc.)
-    • Build output directories (dist/, build/, target/, out/, etc.)
-    • Dependency directories (node_modules/, .venv/, vendor/, etc.)
-    • Package manager lock files that should NOT be committed (only ignore lock files \
-that are not conventionally committed — e.g. ignore nothing if the project uses poetry.lock \
-or package-lock.json, which ARE committed by convention)
-    • Environment and secrets (.env, .env.local, *.pem, *.key, secrets.*)
-    • Editor and IDE configs (.idea/, .vscode/, *.swp, .DS_Store, Thumbs.db, etc.)
-    • Test and coverage artifacts (.coverage, htmlcov/, .pytest_cache/, etc.)
-    • Logs and temporary files (*.log, tmp/, temp/)
-    • OS-specific files (.DS_Store, desktop.ini, Thumbs.db)
-    • Any project-specific files you can infer from the file list
+STEP 1 — Detect the stack from the file tree:
+  Languages    *.py -> Python | *.js *.ts -> Node.js | *.rs -> Rust | *.go -> Go
+               *.java *.kt -> JVM | *.cs -> .NET | *.rb -> Ruby | *.php -> PHP
+  Pkg managers package.json -> npm/yarn/pnpm | pyproject.toml or setup.py -> pip/poetry
+               Cargo.toml -> cargo | go.mod -> Go modules | Gemfile -> bundler
+               composer.json -> Composer
+  Frameworks   next.config.* -> Next.js | nuxt.config.* -> Nuxt | angular.json -> Angular
+  Editors      .vscode/ present -> VS Code user | .idea/ present -> JetBrains user
+  OS           .DS_Store present -> macOS | Thumbs.db present -> Windows
 
-Rules:
-1. Organize the output in clearly commented sections (e.g. # Python, # Node.js, # Editors).
-2. Keep each section tight — no duplicate patterns across sections.
-3. Preserve any custom entries from the existing .gitignore that are not covered by \
-your generated patterns.
-4. Do NOT ignore files that are conventionally committed (poetry.lock, package-lock.json, \
-Cargo.lock, etc.).
-5. Do NOT add patterns that would ignore source code or project files that should be tracked.
-6. Respond with ONLY the raw .gitignore content. No explanation, no preamble, \
-no markdown fences, no code blocks."""
+STEP 2 — Generate ignore patterns only for what you detected:
+
+  Python       __pycache__/, *.py[cod], *$py.class, *.so, *.egg-info/, .eggs/,
+               dist/, build/, .venv/, venv/, env/, ENV/, env.bak/, venv.bak/,
+               .coverage, .coverage.*, htmlcov/, .pytest_cache/, .mypy_cache/,
+               .ruff_cache/, .tox/, .nox/, nosetests.xml, coverage.xml, *.cover,
+               .hypothesis/
+
+  Node.js      node_modules/, .npm, .yarn/, .pnp.*, .cache/
+
+  Next.js      .next/, out/
+
+  Nuxt         .nuxt/, dist/
+
+  Java/Kotlin  *.class, *.jar, *.war, *.ear, target/, build/
+
+  Rust         target/   (Cargo.lock is committed for binaries — do NOT ignore it)
+
+  Go           vendor/ only if present in tree; go.sum is committed — do NOT ignore it
+
+  Secrets      .env, .env.local, .env.*.local, *.pem, *.key, secrets.*
+
+  Editors      .vscode/, .idea/, *.swp, *.swo, *~, *.sublime-workspace,
+               *.sublime-project
+
+  OS           .DS_Store, .DS_Store?, ._*, .Spotlight-V100, .Trashes,
+               ehthumbs.db, Thumbs.db, desktop.ini
+
+  Logs/temp    *.log, *.tmp, *.temp, log/, logs/, tmp/, temp/
+
+LOCK FILE RULE — NEVER ignore these, they are committed by convention:
+  poetry.lock, package-lock.json, yarn.lock, pnpm-lock.yaml,
+  Cargo.lock (binaries), Gemfile.lock, composer.lock, go.sum
+
+CUSTOM ENTRIES — preserve any entries in the existing .gitignore not already covered
+above. Place them under a "# Project-specific" section at the bottom.
+
+OUTPUT:
+  - Organize in commented sections: # Python, # Node.js, # Editors, # OS, etc.
+  - Include only sections relevant to the detected stack
+  - No duplicate patterns across sections
+  - Do NOT ignore source code, test files, or tracked project configuration
+  - Respond with ONLY the raw .gitignore content — no explanation, no preamble,
+    no markdown fences, no code blocks"""
 
 _MAX_SUBJECT_LENGTH = 72
 _API_TIMEOUT_SECONDS = 30
 
 FALLBACK_MODELS = [
-    "stepfun/step-3.5-flash:free",
-    "arcee-ai/trinity-large-preview:free",
-    "openrouter/hunter-alpha",
     "nvidia/nemotron-3-super-120b-a12b:free",
-    "openrouter/healer-alpha",
-    "z-ai/glm-4.5-air:free",
+    "qwen/qwen3-coder:free",
+    "arcee-ai/trinity-large-preview:free",
+    "stepfun/step-3.5-flash:free",
 ]
 
 
@@ -151,10 +190,8 @@ def _parse_commit_message(raw: str, model: str) -> CommitSuggestion:
 def _parse_gitignore_content(raw: str, model: str) -> GitignoreSuggestion:
     """Parse the raw .gitignore content returned by the AI."""
     content = raw.strip()
-    # Strip accidental markdown fences the model may have added
     if content.startswith("```"):
         lines = content.splitlines()
-        # Remove first line (```gitignore or ```) and last ``` if present
         inner = lines[1:] if lines[0].startswith("```") else lines
         if inner and inner[-1].strip() == "```":
             inner = inner[:-1]
@@ -203,13 +240,20 @@ def _call_api(
     """Call the OpenRouter API with fallback models.
 
     Returns Result with (content, model_used) on success.
+
+    The request body includes ``thinking: {"type": "disabled"}`` to suppress
+    extended thinking / chain-of-thought on models that support it (Claude 3.7+,
+    DeepSeek R1, QwQ, o1/o3, etc.). Thinking tokens add significant latency
+    without improving output quality for well-specified structured tasks like
+    commit messages and .gitignore generation. Models that do not recognise this
+    field ignore it silently — it is safe to send to all models.
     """
     url = f"{config.base_url}{OPENROUTER_CHAT_ENDPOINT}"
     models_to_try = [config.model] + [m for m in FALLBACK_MODELS if m != config.model]
     last_error = "Unknown error"
 
     for model in models_to_try:
-        request_body = {
+        request_body: dict[str, object] = {
             "model": model,
             "messages": [
                 {"role": "system", "content": system_prompt},
@@ -217,6 +261,9 @@ def _call_api(
             ],
             "max_tokens": max_tokens,
             "temperature": 0.2,
+            # Disable extended thinking on models that support it.
+            # Safe to include for all models — unsupported models ignore it.
+            "thinking": {"type": "disabled"},
         }
 
         _log_api_event(config, "request", {"model": model, "url": url, "payload": request_body})
@@ -297,7 +344,6 @@ def suggest_gitignore(
 ) -> Result[GitignoreSuggestion]:
     """Send the full file list to OpenRouter and get a reorganized .gitignore."""
     user_prompt = _build_gitignore_user_prompt(file_list, existing_gitignore)
-    # .gitignore can be long — allow up to 2000 tokens
     api_result = _call_api(GITIGNORE_SYSTEM_PROMPT, user_prompt, config, max_tokens=2000)
     if not api_result.ok:
         return Result(ok=False, error=api_result.error)
