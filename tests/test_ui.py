@@ -7,7 +7,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from aicommit.models import ChangedFile, CommitResult, CommitSuggestion, Config, GitignoreSuggestion
+from aicommit.models import (
+    ChangedFile,
+    CommitResult,
+    CommitSuggestion,
+    Config,
+    GitignoreSuggestion,
+)
 from aicommit.ui import (
     display_error,
     display_gitignore_suggestion,

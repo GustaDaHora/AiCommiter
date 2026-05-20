@@ -253,7 +253,7 @@ class TestListAllFiles:
         assert ".venv/" in files
         assert not any("pyvenv.cfg" in f for f in files)
 
-    def test_cache_dirs_are_NOT_collapsed(
+    def test_cache_dirs_are_not_collapsed(
         self, mock_subprocess: MagicMock, tmp_path: Path
     ) -> None:
         """Cache and build dirs like __pycache__, .pytest_cache, dist are listed normally.
@@ -506,6 +506,20 @@ class TestGetDiffForFiles:
 
         call_args = mock_subprocess.call_args[0][0]
         assert "--cached" not in call_args
+
+    def test_uses_no_index_diff_for_untracked_files(
+        self, mock_subprocess: MagicMock, mock_config: Config
+    ) -> None:
+        """Untracked files use git diff --no-index against /dev/null."""
+        files = [ChangedFile(path="untracked.py", status="?", staged=False)]
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="diff content\n", stderr="")
+
+        get_diff_for_files(files, "/repo", mock_config)
+
+        call_args = mock_subprocess.call_args[0][0]
+        assert "--no-index" in call_args
+        assert "/dev/null" in call_args
+        assert "untracked.py" in call_args
 
     def test_truncates_per_file_diff(
         self, mock_subprocess: MagicMock, mock_config: Config
