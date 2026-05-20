@@ -128,10 +128,13 @@ _MAX_SUBJECT_LENGTH = 72
 _API_TIMEOUT_SECONDS = 30
 
 FALLBACK_MODELS = [
+    "deepseek/deepseek-v4-flash:free",
+    "openrouter/owl-alpha",
+    "arcee-ai/trinity-large-thinking:free",
+    "z-ai/glm-5.1",
+    "openai/gpt-oss-120b:free",
+    "poolside/laguna-m.1:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
-    "qwen/qwen3-coder:free",
-    "arcee-ai/trinity-large-preview:free",
-    "stepfun/step-3.5-flash:free",
 ]
 
 

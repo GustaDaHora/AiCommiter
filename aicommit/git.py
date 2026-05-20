@@ -266,7 +266,9 @@ def get_diff_for_files(files: list[ChangedFile], cwd: str, config: Config) -> Di
             total_lines += 2
             continue
 
-        if file.staged:
+        if file.status == "?":
+            proc = _run_git(["diff", "--no-index", "--", "/dev/null", file.path], cwd)
+        elif file.staged:
             proc = _run_git(["diff", "--cached", "--", file.path], cwd)
         else:
             proc = _run_git(["diff", "--", file.path], cwd)

@@ -14,7 +14,13 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.text import Text
 
-from aicommit.models import ChangedFile, CommitResult, CommitSuggestion, Config, GitignoreSuggestion
+from aicommit.models import (
+    ChangedFile,
+    CommitResult,
+    CommitSuggestion,
+    Config,
+    GitignoreSuggestion,
+)
 
 _console = Console()
 _err_console = Console(stderr=True)

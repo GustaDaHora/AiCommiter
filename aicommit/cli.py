@@ -26,12 +26,12 @@ from aicommit.ui import (
     display_error,
     display_gitignore_success,
     display_gitignore_suggestion,
+    display_spinner_message,
     display_success,
     prompt_api_key,
     prompt_continue,
     prompt_edit_and_confirm,
     prompt_file_selection,
-    display_spinner_message,
 )
 
 
@@ -104,7 +104,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _load_config_with_prompt(verbose: bool) -> tuple[object, int] | tuple[object, None]:
-    """Load config, prompting for API key if missing. Returns (config, None) or (None, exit_code)."""
+    """Load config, prompting for API key if missing.
+
+    Returns (config, None) or (None, exit_code).
+    """
     try:
         try:
             config = load_config()
@@ -138,7 +141,7 @@ def _run_gitignore(args: argparse.Namespace, verbose: bool) -> int:
     """
     config, err = _load_config_with_prompt(verbose)
     if err is not None:
-        return err  # type: ignore[return-value]
+        return err
 
     from aicommit.models import Config as ConfigType
     assert isinstance(config, ConfigType)
@@ -221,7 +224,7 @@ def _run_commit(args: argparse.Namespace, verbose: bool) -> int:
     """Run the default commit pipeline."""
     config, err = _load_config_with_prompt(verbose)
     if err is not None:
-        return err  # type: ignore[return-value]
+        return err
 
     from aicommit.models import Config as ConfigType
     assert isinstance(config, ConfigType)
