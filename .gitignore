@@ -90,3 +90,6 @@ config.yml
 # Project-specific
 agents.md
 terminal.txt
+/aicommit/__pycache__
+/aicommit/__pycache__
+/aicommit/__pycache__
